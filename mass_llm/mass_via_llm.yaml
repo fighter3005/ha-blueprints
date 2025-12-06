@@ -1,18 +1,21 @@
 blueprint:
   domain: automation
-  name: Music Assistant - Local LLM Enhanced Voice Support (Controls + Shuffle + Repeat)
+  name: Music Assistant - Local LLM Enhanced Voice Support (Final)
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
 
     # Play & Control media using voice commands with LLM assistance
 
-    **UPDATED VERSION:** Supports Playback Controls, Shuffle (On/Off), and Repeat (All/One/Off).
+    **FINAL VERSION:** Supports Playback Controls, Shuffle, Repeat, and Generic "Play Music" requests.
+
+    ### Configuration Note
+    To ensure music keeps playing after one song (Queue/Radio mode), set **Radio Mode** to **"Always"** in the automation settings below.
 
     ### Usage
 
-    * **Play:** "Play Queen", "Shuffle songs by Madonna"
+    * **Play:** "Play Queen", "Play something", "Play some jazz"
     * **Control:** "Stop", "Next", "Pause"
-    * **Settings:** "Turn on shuffle", "Repeat this song", "Repeat all", "Disable repeat"
+    * **Settings:** "Turn on shuffle", "Repeat all"
 
     '
   homeassistant:
@@ -37,7 +40,7 @@ blueprint:
           name: Default Player
           description: 'The default Music Assistant player which will be used in case
             it is not clear from the request in which area or on which player the
-            request should be played. Leave empty if undesired.'
+            request should be played.'
           selector:
             entity:
               filter:
@@ -48,8 +51,8 @@ blueprint:
           default:
         play_continuously:
           name: Radio Mode
-          description: 'Determines if the "radio_mode" setting should be set for the
-            play media action.'
+          description: 'IMPORTANT: Set this to "Always" if you want the queue to auto-fill with songs (Continuous/Radio mode).
+            If set to "Never", playback stops after the specific song/album finishes.'
           selector:
             select:
               options:
@@ -123,7 +126,7 @@ blueprint:
     prompt_settings:
       name: Prompt setting for the LLM
       icon: mdi:robot
-      description: Fine-tune the prompts. (Modified for Advanced Controls)
+      description: Fine-tune the prompts.
       collapsed: true
       input:
         expose_players:
@@ -185,11 +188,8 @@ blueprint:
             - For Repeat use: "repeat_all", "repeat_one", or "repeat_off".
             
             IF media_type is NOT control:
-            - If track: media_id is the track name.
-            - If album: media_id is the album name.
-            - If artist: media_id is the artist name.
-            - If playlist: media_id is the playlist name.
-            - If radio: media_id is the channel name.'
+            - If track/album/artist/playlist/radio: media_id is the name.
+            - SPECIAL: If the user says "Play music" or "Play something" (generic), use media_type: "artist" and media_id: "Library" (This will shuffle the library).'
         llm_prompt_artist_album:
           name: Artist and album LLM prompt
           selector:
@@ -209,8 +209,7 @@ blueprint:
           default: 'Examples:
             Stop music >> {"action_data":{"media_id": "media_stop", "media_type":"control"}}.
             Turn on shuffle >> {"action_data":{"media_id": "shuffle_on", "media_type":"control"}}.
-            Turn off repeat >> {"action_data":{"media_id": "repeat_off", "media_type":"control"}}.
-            Repeat this song >> {"action_data":{"media_id": "repeat_one", "media_type":"control"}}.
+            Play something / Play Music >> {"action_data":{"media_id": "Library", "media_type":"artist"}}.
             Artist search >> {"action_data":{"media_id": "artist name", "media_type":"artist"}}.
             Album by artist >> {"action_data":{"media_id": "album name", "media_type": "album", "artist": "artist name"}}.'
         llm_prompt_media_description:
