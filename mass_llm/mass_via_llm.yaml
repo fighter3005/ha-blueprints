@@ -6,7 +6,7 @@ blueprint:
 
     # Play & Control media using voice commands with LLM assistance
 
-    **UPDATED VERSION:** Supports Playback Controls (Stop, Next, Pause) and fixed for recent HA versions.
+    **UPDATED VERSION:** Supports Playback Controls (Stop, Next, Pause) with auto-correction for service names.
 
     ### Usage
 
@@ -176,9 +176,9 @@ blueprint:
           default: 'The argument "media_id" is mandatory!
 
             IF media_type is "control":
-            - "media_id" must be exactly one of these service names: "stop", "media_play_pause", "media_next_track", "media_previous_track".
+            - "media_id" must be exactly one of these service names: "media_stop", "media_play_pause", "media_next_track", "media_previous_track".
             - Example: "Next song" -> media_id: "media_next_track".
-            - Example: "Stop music" -> media_id: "stop".
+            - Example: "Stop music" -> media_id: "media_stop".
             
             IF media_type is NOT control:
             - If track: media_id is the track name.
@@ -203,7 +203,7 @@ blueprint:
               multiline: true
               multiple: false
           default: 'Examples:
-            Stop music >> {"action_data":{"media_id": "stop", "media_type":"control"}}.
+            Stop music >> {"action_data":{"media_id": "media_stop", "media_type":"control"}}.
             Next song >> {"action_data":{"media_id": "media_next_track", "media_type":"control"}}.
             Artist search >> {"action_data":{"media_id": "artist name", "media_type":"artist"}}.
             Album by artist >> {"action_data":{"media_id": "album name", "media_type": "album", "artist": "artist name"}}.
@@ -300,7 +300,6 @@ actions:
       description: !input llm_prompt_media_description
       target: !input llm_prompt_target
       outro: !input llm_prompt_outro
-    # FIX: Removed the split logic, assuming HA returns lists now
     area_names: '{{ integration_entities(''music_assistant'')  | map(''area_name'')
       | list }}'
     player_names: '{{ integration_entities(''music_assistant'') | map(''state_attr'',
@@ -326,7 +325,6 @@ actions:
       radio_mode: '{{ false if play_continuously == ''Never'' else play_continuously
         == ''Always'' and llm_result.action_data.media_type != ''radio'' or ''NA''
         }}'
-    # FIX: Logic adapted to handle lists directly, no split used
     llm_target_data:
       entity_id: '{% set players = llm_result.get(''target_data'', {}).get(''players'',
         []) %} {% set players = players | join(''|'') if players is list else players
@@ -360,7 +358,19 @@ actions:
       - condition: template
         value_template: "{{ llm_action_data.media_type == 'control' }}"
       sequence:
-      - service: "media_player.{{ llm_action_data.media_id }}"
+      # FIX: Map simple words (stop/next) to official HA service names (media_stop/media_next_track)
+      # This handles cases where the LLM ignores instructions and outputs "stop" instead of "media_stop"
+      - service: >-
+          media_player.{{ 
+            {
+              'stop': 'media_stop', 
+              'pause': 'media_pause', 
+              'play': 'media_play', 
+              'next': 'media_next_track', 
+              'skip': 'media_next_track', 
+              'previous': 'media_previous_track' 
+            }.get(llm_action_data.media_id, llm_action_data.media_id) 
+          }}
         target: '{{ target }}'
     # Option 2: Default (User asked to Play/Search Music)
     default:
