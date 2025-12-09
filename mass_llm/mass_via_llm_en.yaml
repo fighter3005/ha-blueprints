@@ -44,7 +44,9 @@ blueprint:
           selector:
             entity:
               filter:
-@@ -50,248 +41,234 @@ blueprint:
+              - integration: music_assistant
+                domain:
+                - media_player
               multiple: false
           default:
         play_continuously:
@@ -290,11 +292,19 @@ actions:
 - alias: Store input from blueprint in variables so they can be used in the prompt
   variables:
     version: 20250404
-
     shuffle: '{{ ''shuffle'' in trigger.sentence | lower }}'
     expose_areas: !input expose_areas
     expose_players: !input expose_players
-@@ -308,16 +285,14 @@ actions:
+    prompt:
+      intro: !input llm_prompt_intro
+      media_type: !input llm_prompt_media_type
+      media_id: !input llm_prompt_media_id
+      artist_album: !input llm_prompt_artist_album
+      examples: !input llm_prompt_examples
+      description: !input llm_prompt_media_description
+      target: !input llm_prompt_target
+      outro: !input llm_prompt_outro
+    area_names: '{{ integration_entities(''music_assistant'')  | map(''area_name'')
       | list }}'
     player_names: '{{ integration_entities(''music_assistant'') | map(''state_attr'',
       ''friendly_name'') | list }}'
@@ -311,7 +321,31 @@ actions:
   variables:
     llm_result: '{{ result.response.speech.plain.speech | from_json }}'
     play_continuously: !input play_continuously
-@@ -349,15 +324,15 @@ actions:
+    llm_action_data:
+      media_id: '{{ llm_result.action_data.media_id }}'
+      media_type: '{{ llm_result.action_data.media_type }}'
+      artist: '{{ llm_result.action_data.artist | default(''NA'', true) }}'
+      album: '{{ llm_result.action_data.album | default(''NA'', true) }}'
+      radio_mode: '{{ false if play_continuously == ''Never'' else play_continuously
+        == ''Always'' and llm_result.action_data.media_type != ''radio'' or ''NA''
+        }}'
+    llm_target_data:
+      entity_id: '{% set players = llm_result.get(''target_data'', {}).get(''players'',
+        []) %} {% set players = players | join(''|'') if players is list else players
+        %} {{ integration_entities(''music_assistant'') | expand | selectattr(''name'',
+        ''in'', player_names | select(''search'', players, ignorecase=true)
+        | list) | map(attribute=''entity_id'') | list if players else [] }}'
+      area_id: '{% set areas = llm_result.get(''target_data'', {}).get(''areas'',
+        []) %} {% set areas = areas | join(''|'') if areas is list else areas %} {{
+        area_names | select(''search'', areas, ignorecase=true) | map(''area_id'')
+        | list if areas else [] }}'
+    llm_target: '{{ iif(llm_result.get(''target_data'', {}).get(''players'') or llm_result.get(''target_data'',
+      {}).get(''areas'')) }}'
+    device_area: '{{ area_id(trigger.device_id) if area_name(trigger.device_id) in
+      area_names }}'
+    default_player: !input default_player
+    backup_target: '{{ (dict(area_id=[device_area]) if device_area) or (dict(entity_id=[default_player])
+      if default_player) }}'
     target_data: '{{ (llm_target_data if llm_target else backup_target) | default({},
       true) }}'
     target: '{{ dict(target_data.items() | selectattr(''1'')) }}'
@@ -327,7 +361,8 @@ actions:
     - conditions:
       - condition: template
         value_template: "{{ llm_action_data.media_id in ['shuffle_on', 'shuffle_off'] }}"
-@@ -366,8 +341,7 @@ actions:
+      sequence:
+      - service: media_player.shuffle_set
         data:
           shuffle: "{{ true if llm_action_data.media_id == 'shuffle_on' else false }}"
         target: '{{ target }}'
@@ -336,7 +371,8 @@ actions:
     - conditions:
       - condition: template
         value_template: "{{ 'repeat' in llm_action_data.media_id }}"
-@@ -376,32 +350,30 @@ actions:
+      sequence:
+      - service: media_player.repeat_set
         data:
           repeat: "{{ llm_action_data.media_id | replace('repeat_', '') }}"
         target: '{{ target }}'
@@ -369,7 +405,8 @@ actions:
       if:
         - condition: template
           value_template: "{{ shuffle == true }}"
-@@ -410,7 +382,7 @@ actions:
+      then:
+        - action: media_player.shuffle_set
           data:
             shuffle: true
           target: '{{ target }}'
@@ -377,7 +414,20 @@ actions:
   variables:
     combine: !input combine_text
     responses:
-@@ -431,7 +403,7 @@ actions:
+      no_target: !input no_target_response
+      only_area: !input area_response
+      only_player: !input player_response
+      area_player: !input area_and_player_response
+    response: '{% if iif(target.get(''area_id'') and target.get(''entity_id'')) %}
+      area_player {% elif iif(target.get(''area_id'')) %} only_area {% elif iif(target.get(''entity_id''))
+      %} only_player {% else %} no_target {% endif %}'
+    area_list: '{{ target.get(''area_id'', []) | map(''area_name'') | list }}'
+    area_info: '{{ area_list[:-1] | join('', '') ~ '' '' ~ combine ~ '' '' ~ area_list[-1]
+      if area_list | count > 2 else area_list | join('' '' ~ combine ~ '' '') }}'
+    player_list: '{{ target.get(''entity_id'') | map(''state_attr'', ''friendly_name'')
+      | list }}'
+    player_info: '{{ player_list[:-1] | join('', '') ~ '' '' ~ combine ~ '' '' ~ player_list[-1]
+      if player_list | count > 2 else player_list | join('' '' ~ combine ~ '' '')
       }}'
     media_info: '{{ llm_result.media_description | default(llm_action_data.media_id,
       true) }}'
@@ -385,3 +435,4 @@ actions:
   set_conversation_response: '{{ responses[response] | replace(''<media_info>'', media_info)
     | replace(''<area_info>'', area_info) | replace(''<player_info>'', player_info)
     }}'
+mode: parallel
