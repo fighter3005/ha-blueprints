@@ -1,29 +1,29 @@
 blueprint:
   domain: automation
-  name: Music Assistant - Lokale LLM-gestützte Sprachunterstützung (Final)
+  name: Music Assistant - Lokale LLM-gestützte Sprachunterstützung (extended_openai_conversation compatible)
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
     # Medien über Sprachbefehle mit LLM-Unterstützung abspielen und steuern
     **FINALE VERSION:** Unterstützt Wiedergabesteuerung, Zufallswiedergabe, Wiederholung und allgemeine "Musik abspielen"-Anfragen.
+    
+    ### WICHTIG - Agent ID
+    Da Integrationen wie "Extended OpenAI Conversation" keine Entitäten erstellen, müssen Sie hier die **Agent ID** manuell eingeben.
+    Sie finden diese unter Entwicklerwerkzeuge -> Aktionen -> conversation.process (YAML-Modus).
+    
     ### Konfigurationshinweis
     Damit die Musik nach einem Lied weiterläuft (Warteschlange/Radiomodus), stellen Sie den **Radiomodus** in den untenstehenden Automatisierungseinstellungen auf **"Immer"** ein.
-    ### Nutzung
-    *   **Abspielen:** "Spiele Queen", "Spiele etwas", "Spiele etwas Jazz"
-    *   **Steuern:** "Stopp", "Nächstes Lied", "Pause"
-    *   **Einstellungen:** "Zufallswiedergabe aktivieren", "Alle wiederholen"
     '
   homeassistant:
     min_version: 2024.10.0
   input:
     llm_agent:
-      name: LLM Konversations-Agent
-      description: Der LLM-Agent, den Sie zur Verarbeitung der Anfrage verwenden möchten.
+      name: LLM Agent ID oder Entity ID
+      description: 'Fügen Sie hier die Agent ID (für LiteLLM/Extended OpenAI) oder die Entity ID (z.B. conversation.ollama) ein.'
       selector:
-        entity:
-          filter:
-          - domain:
-            - conversation
-          multiple: false
+        text:
+          multiline: false
+          type: text
+      default: ""
     music_assistant_settings:
       name: Einstellungen für die Music Assistant Wiedergabe
       icon: mdi:music
@@ -268,6 +268,7 @@ actions:
 - alias: Eingabe aus Blueprint in Variablen speichern, damit sie im Prompt verwendet werden können
   variables:
     version: 20250404
+    llm_agent_id: !input llm_agent
     shuffle: '{{ ''shuffle'' in trigger.sentence | lower }}'
     expose_areas: !input expose_areas
     expose_players: !input expose_players
@@ -289,7 +290,7 @@ actions:
   data:
     text: '{{ prompt.values() | join(''
       '') }}'
-    agent_id: !input llm_agent
+    agent_id: '{{ llm_agent_id }}'
   response_variable: result
 - alias: Relevanten Teil des LLM-Ergebnisses in Variable speichern und Ziel definieren
   variables:
