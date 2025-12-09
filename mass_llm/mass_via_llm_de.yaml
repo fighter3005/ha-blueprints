@@ -16,14 +16,12 @@ blueprint:
     min_version: 2024.10.0
   input:
     llm_agent:
-      name: LLM Konversations-Agent
-      description: Der LLM-Agent, den Sie zur Verarbeitung der Anfrage verwenden möchten.
+      name: LLM converation agent
+      description: The LLM agent you want to use to process the query
       selector:
-        entity:
-          filter:
-          - domain:
-            - conversation
-          multiple: false
+        conversation_agent: # This is the modern selector
+          language: "en"
+        multiple: false
     music_assistant_settings:
       name: Einstellungen für die Music Assistant Wiedergabe
       icon: mdi:music
