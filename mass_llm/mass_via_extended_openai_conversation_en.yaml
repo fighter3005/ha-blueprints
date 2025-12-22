@@ -1,20 +1,20 @@
 blueprint:
   domain: automation
-  name: Music Assistant - Local LLM Enhanced Voice Support (extended_openai_conversation compatible)
+  name: Music Assistant - Local LLM Enhanced Voice Support (Volume Added)
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
     # Play & Control media using voice commands with LLM assistance
-    **FINAL VERSION:** Supports Playback Controls, Shuffle, Repeat, and Generic "Play Music" requests.
+    **FINAL VERSION:** Supports Playback Controls, Shuffle, Repeat, **Volume**, and Generic "Play Music" requests.
     
     ### IMPORTANT - Agent ID
     Since integrations like "Extended OpenAI Conversation" do not always create entities, you must enter the **Agent ID** manually here.
     You can find this under Developer Tools -> Actions -> conversation.process (YAML mode).
-
     ### Configuration Note
     To ensure music keeps playing after one song (Queue/Radio mode), set **Radio Mode** to **"Always"** in the automation settings below.
     ### Usage
     * **Play:** "Play Queen", "Play something", "Play some jazz"
     * **Control:** "Stop", "Next", "Pause"
+    * **Volume:** "Set volume to 50", "Turn it up", "Volume down in the kitchen"
     * **Settings:** "Turn on shuffle", "Repeat all"
     '
   homeassistant:
@@ -81,6 +81,9 @@ blueprint:
           - (turn on|turn off|enable|disable|set) (shuffle|repeat) [in|on] {query}
           - (turn on|turn off|enable|disable|set) (shuffle|repeat)
           - repeat (one|all|off)
+          - (set|change) volume [to] {query}
+          - (turn|volume) (up|down) [in|on] {query}
+          - (turn|volume) (up|down)
         combine_text:
           name: Combine word
           description: Word used to join areas (e.g. "Kitchen <and> Living Room")
@@ -145,7 +148,7 @@ blueprint:
               multiline: true
               multiple: false
           default: 'You are an AI process that transforms a voice command into a structured JSON.
-            The user may ask to play music (search) OR control playback (stop, next, shuffle, repeat).
+            The user may ask to play music (search) OR control playback (stop, next, shuffle, repeat, volume).
             This is the voice command query provided by the user: "{{ trigger.sentence }}"
             Here is the structured JSON that I expect in response {"action_data":
             {"media_id":"name", "media_type":"type", "artist":"name", "album":"name"},
@@ -160,7 +163,7 @@ blueprint:
               multiple: false
           default: 'The argument "media_type" is mandatory!
             Values can be:
-            - "control" if the user wants to STOP, PAUSE, RESUME, SKIP, SHUFFLE, or REPEAT.
+            - "control" if the user wants to STOP, PAUSE, RESUME, SKIP, SHUFFLE, REPEAT or ADJUST VOLUME.
             - "track" if the search is about a specific track.
             - "album" if the search is about an album.
             - "artist" if the search is about an artist.
@@ -179,6 +182,7 @@ blueprint:
             - For Basic Control use: "media_stop", "media_play_pause", "media_next_track", "media_previous_track".
             - For Shuffle use: "shuffle_on" or "shuffle_off".
             - For Repeat use: "repeat_all", "repeat_one", or "repeat_off".
+            - For Volume use: "volume_up", "volume_down", or "volume_X" where X is the number 0-100 (e.g. "volume_45" for 45%).
             IF media_type is NOT control:
             - If track/album/artist/playlist/radio: media_id is the name.
             - SPECIAL: If the user says "Play music" or "Play something" (generic), use media_type: "artist" and media_id: "Library" (This will shuffle the library).'
@@ -201,6 +205,8 @@ blueprint:
           default: 'Examples:
             Stop music >> {"action_data":{"media_id": "media_stop", "media_type":"control"}}.
             Turn on shuffle >> {"action_data":{"media_id": "shuffle_on", "media_type":"control"}}.
+            Set volume to 50% >> {"action_data":{"media_id": "volume_50", "media_type":"control"}}.
+            Turn it up >> {"action_data":{"media_id": "volume_up", "media_type":"control"}}.
             Play something / Play Music >> {"action_data":{"media_id": "Library", "media_type":"artist"}}.
             Artist search >> {"action_data":{"media_id": "artist name", "media_type":"artist"}}.
             Album by artist >> {"action_data":{"media_id": "album name", "media_type": "album", "artist": "artist name"}}.'
@@ -212,7 +218,7 @@ blueprint:
               multiline: true
               multiple: false
           default: The "media_description" key is used to describe the media or action.
-            For controls, use "Stopping", "Skipping", "Setting shuffle", etc.
+            For controls, use "Stopping", "Skipping", "Setting volume", etc.
             For music, use "the best Queen songs".
         llm_prompt_target:
           name: Target data LLM prompt
@@ -362,7 +368,31 @@ actions:
         data:
           repeat: "{{ llm_action_data.media_id | replace('repeat_', '') }}"
         target: '{{ target }}'
-    # 3. BASIC CONTROL (Stop, Next, Prev, Pause)
+    # 3. VOLUME CONTROL
+    - conditions:
+      - condition: template
+        value_template: "{{ 'volume' in llm_action_data.media_id }}"
+      sequence:
+        - choose:
+            # Set Volume to specific % (e.g., volume_50)
+            - conditions: "{{ '_' in llm_action_data.media_id and llm_action_data.media_id.split('_')[1] | is_number }}"
+              sequence:
+                - service: media_player.volume_set
+                  data:
+                    # Divides 0-100 input by 100 to get 0.0-1.0 float required by HA
+                    volume_level: "{{ (llm_action_data.media_id.split('_')[1] | float) / 100 }}"
+                  target: "{{ target }}"
+            # Volume Up
+            - conditions: "{{ llm_action_data.media_id == 'volume_up' }}"
+              sequence:
+                - service: media_player.volume_up
+                  target: "{{ target }}"
+            # Volume Down
+            - conditions: "{{ llm_action_data.media_id == 'volume_down' }}"
+              sequence:
+                - service: media_player.volume_down
+                  target: "{{ target }}"
+    # 4. BASIC CONTROL (Stop, Next, Prev, Pause)
     - conditions:
       - condition: template
         value_template: "{{ llm_action_data.media_type == 'control' }}"
@@ -379,7 +409,7 @@ actions:
             }.get(llm_action_data.media_id, llm_action_data.media_id)
           }}
         target: '{{ target }}'
-    # 4. DEFAULT (Play New Media)
+    # 5. DEFAULT (Play New Media)
     default:
     - alias: Play Music based on LLM result
       action: music_assistant.play_media
