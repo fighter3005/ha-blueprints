@@ -1,78 +1,62 @@
 blueprint:
   domain: automation
-  name: Music Assistant - Universal LLM Enhanced Voice Support (EN+DE + Volume + Agent Select)
+  name: Music Assistant - Universal Voice Control (All-in-One)
+  description: >
+    Unified Voice Control for Music Assistant.
+    - Supports English and German commands.
+    - Select ANY conversation agent (Extended OpenAI, Ollama, etc.).
+    - Supports Play, Stop, Shuffle, Repeat, and Volume.
   source_url: https://github.com/music-assistant/voice-support
-  description: >-
-    Play & control Music Assistant using voice commands with LLM assistance.
-
-    - Works with any Home Assistant conversation agent entity (Extended OpenAI Conversation, Ollama, etc.)
-    - EN + DE trigger sentences included
-    - Supports: Play, Stop/Pause/Resume/Next/Previous, Shuffle, Repeat, Volume, Generic "Play music"
-    - Area/player targeting + fallback to device area or default player
   homeassistant:
     min_version: 2024.10.0
 
 input:
   llm_agent:
-    name: Conversation Agent (LLM)
-    description: Select the Home Assistant conversation agent entity to process the request.
+    name: Conversation Agent
+    description: Select the Conversation Agent (e.g. Extended OpenAI, Ollama).
     selector:
       entity:
         filter:
-          - domain:
-              - conversation
+          - domain: conversation
         multiple: false
 
   default_player:
     name: Default Player
-    description: Used when no area/player target can be determined.
+    description: Fallback player if none is mentioned.
     selector:
       entity:
         filter:
           - integration: music_assistant
-            domain:
-              - media_player
+            domain: media_player
         multiple: false
     default:
 
   play_continuously:
     name: Radio Mode
-    description: >-
-      Set to "Always" to keep filling the queue (radio/continuous play).
-      Set to "Never" to stop after the requested media.
+    description: 'Set to "Always" for continuous playback (Queue/Radio).'
     selector:
       select:
         options:
           - Use player settings
           - Always
           - Never
-        multiple: false
-        custom_value: false
-        sort: false
     default: Use player settings
 
   trigger:
-    name: Conversation trigger sentences (EN + DE)
-    description: Triggers for the automation.
+    name: Trigger Sentences
+    description: Sentences that trigger this automation.
     selector:
       text:
         multiline: false
         multiple: true
     default:
-      # PLAY (EN/DE)
       - (shuffle|play|listen to|spiele|hör|höre) {query}
-
-      # BASIC CONTROLS (EN/DE)
       - (stop|pause|resume|next|skip|previous|stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges) [the|die] [music|song|track|media|musik|lied|titel|medium] [in|on|im|auf] {query}
       - (stop|pause|resume|next|skip|previous|stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges) [the|die] [music|song|track|media|musik|lied|titel|medium]
-
-      # SHUFFLE / REPEAT (EN/DE)
       - (turn on|turn off|enable|disable|set|aktiviere|deaktiviere|schalte ein|schalte aus|setze) (shuffle|zufallswiedergabe|repeat|wiederholen) [in|on|im|auf] {query}
       - (turn on|turn off|enable|disable|set|aktiviere|deaktiviere|schalte ein|schalte aus|setze) (shuffle|zufallswiedergabe|repeat|wiederholen)
       - repeat (one|all|off|eins|alle|aus)
       - wiederhole (eins|alle|aus)
-
-      # VOLUME (EN/DE)
       - (set|change) volume [to] {query}
       - (turn|volume) (up|down) [in|on] {query}
       - (turn|volume) (up|down)
@@ -81,193 +65,137 @@ input:
       - (mach|stelle) (lauter|leiser)
 
   combine_text:
-    name: Combine word
-    description: Word used to join areas/players in the response.
+    name: Combine Word
+    description: Word used to join names in responses (e.g., "and" or "und").
     selector:
-      text:
-        multiline: false
-        multiple: false
+      text: {}
     default: and
 
   no_target_response:
-    name: No target response
+    name: No Target Response
     selector:
-      text:
-        multiline: false
-        multiple: false
+      text: {}
     default: No target could be determined and no default player is set
 
   area_response:
-    name: Area response
+    name: Area Response
     selector:
-      text:
-        multiline: false
-        multiple: false
+      text: {}
     default: OK, <media_info> in <area_info>
 
   player_response:
-    name: Player response
+    name: Player Response
     selector:
-      text:
-        multiline: false
-        multiple: false
+      text: {}
     default: OK, <media_info> on <player_info>
 
   area_and_player_response:
-    name: Area and Player response
+    name: Area+Player Response
     selector:
-      text:
-        multiline: false
-        multiple: false
+      text: {}
     default: OK, <media_info> in <area_info> and on <player_info>
 
   expose_players:
-    name: Expose Music Assistant Players
+    name: Expose Players to LLM
     selector:
       boolean: {}
     default: true
 
   expose_areas:
-    name: Expose areas with Music Assistant Players
+    name: Expose Areas to LLM
     selector:
       boolean: {}
     default: true
 
   llm_prompt_intro:
-    name: Introduction for LLM prompt
+    name: Prompt Intro
     selector:
       text:
         multiline: true
-        multiple: false
     default: >-
-      You are an AI process that transforms a voice command into a structured JSON.
-      The user may ask to play music (search) OR control playback (stop, next, shuffle, repeat, volume).
-      The user request may be in any language.
-
-      This is the voice command query provided by the user: "{{ trigger.sentence }}"
-
-      Here is the structured JSON that I expect in response:
+      You are an AI that transforms voice commands into JSON.
+      The user may speak in any language.
+      Query: "{{ trigger.sentence }}"
+      Expected JSON:
       {"action_data":{"media_id":"name","media_type":"type","artist":"name","album":"name"},
-       "media_description":"description of media/action",
-       "target_data":{"areas":["area name"],"players":["player name"]}}
+      "media_description":"description","target_data":{"areas":["name"],"players":["name"]}}
 
   llm_prompt_media_type:
-    name: Media type LLM prompt
+    name: Prompt Media Type
     selector:
       text:
         multiline: true
-        multiple: false
     default: >-
-      The argument "media_type" is mandatory!
-      Values can be (MUST be English):
-      - "control" if the user wants STOP, PAUSE, RESUME, SKIP, SHUFFLE, REPEAT, or VOLUME.
-      - "track" for a specific track.
-      - "album" for an album.
-      - "artist" for an artist.
-      - "playlist" for a playlist.
-      - "radio" for a radio station/channel.
-      If unsure (e.g. genre request), use "track".
+      "media_type" is mandatory (English only):
+      - "control" (STOP, NEXT, SHUFFLE, REPEAT, VOLUME)
+      - "track", "album", "artist", "playlist", "radio"
 
   llm_prompt_media_id:
-    name: Media ID LLM prompt
+    name: Prompt Media ID
     selector:
       text:
         multiline: true
-        multiple: false
     default: >-
-      The argument "media_id" is mandatory!
-      IF media_type is "control":
-      - Basic: "media_stop", "media_play_pause", "media_next_track", "media_previous_track".
-      - Shuffle: "shuffle_on" or "shuffle_off".
-      - Repeat: "repeat_all", "repeat_one", "repeat_off".
-      - Volume: "volume_up", "volume_down", or "volume_X" where X is 0-100 (e.g. "volume_45").
-      IF media_type is NOT "control":
-      - media_id is the name of the requested media.
-      - SPECIAL: If the user asks generically ("Play music/Spiele etwas"), use media_type: "artist" and media_id: "Library".
+      "media_id" is mandatory.
+      If "control": media_stop, media_play_pause, media_next_track, media_previous_track, shuffle_on, shuffle_off, repeat_all, repeat_one, repeat_off, volume_up, volume_down, volume_X (0-100).
+      If music: The name of the media.
+      Special: "Play music" -> media_type:"artist", media_id:"Library".
 
   llm_prompt_artist_album:
-    name: Artist and album LLM prompt
+    name: Prompt Artist/Album
     selector:
       text:
         multiline: true
-        multiple: false
-    default: >-
-      Optional: Use "artist" and "album" to further restrict the search.
-      Never use these fields for playlist or control requests.
+    default: Optional fields to restrict search.
 
   llm_prompt_examples:
-    name: Examples action data LLM prompt
+    name: Prompt Examples
     selector:
       text:
         multiline: true
-        multiple: false
     default: >-
-      Examples:
-      Stop music >> {"action_data":{"media_id":"media_stop","media_type":"control"}}.
-      Turn on shuffle >> {"action_data":{"media_id":"shuffle_on","media_type":"control"}}.
-      Repeat all >> {"action_data":{"media_id":"repeat_all","media_type":"control"}}.
-      Set volume to 50% >> {"action_data":{"media_id":"volume_50","media_type":"control"}}.
-      Turn it up >> {"action_data":{"media_id":"volume_up","media_type":"control"}}.
-      Play something / Play Music >> {"action_data":{"media_id":"Library","media_type":"artist"}}.
+      Stop -> {"action_data":{"media_id":"media_stop","media_type":"control"}}
+      Volume 50 -> {"action_data":{"media_id":"volume_50","media_type":"control"}}
+      Play Queen -> {"action_data":{"media_id":"Queen","media_type":"artist"}}
 
   llm_prompt_media_description:
-    name: Media description LLM prompt
+    name: Prompt Description
     selector:
       text:
         multiline: true
-        multiple: false
-    default: >-
-      "media_description" describes the requested media/action.
-      For controls: "Stopping", "Skipping", "Setting volume", etc.
-      For music: "the best Queen songs", etc.
+    default: Describe the action (e.g., "Stopping music", "Playing Queen").
 
   llm_prompt_target:
-    name: Target data LLM prompt
+    name: Prompt Target
     selector:
       text:
         multiline: true
-        multiple: false
     default: >-
-      The "target_data" key defines where to play/control.
-
+      Identify where to play.
       {% if expose_areas %}
-      Areas with Music Assistant players: {{ area_names }}.
-      Use ONLY these names for target_data.areas. Always return a list.
+      Areas: {{ area_names }}. Return list in "target_data.areas".
       {% endif %}
-      If no area is mentioned or cannot be matched, use {"areas": []}.
-
       {% if expose_players %}
-      Music Assistant players: {{ player_names }}.
-      Use ONLY these names for target_data.players. Always return a list.
+      Players: {{ player_names }}. Return list in "target_data.players".
       {% endif %}
-      If no player is mentioned or cannot be matched, use {"players": []}.
 
   llm_prompt_outro:
-    name: Outro for LLM prompt
+    name: Prompt Outro
     selector:
       text:
         multiline: true
-        multiple: false
-    default: >-
-      IMPORTANT:
-      - The input query may be in any language.
-      - "media_type" MUST be one of the English terms.
-      - Reply with ONLY the JSON model. No extra text.
+    default: Respond ONLY with valid JSON.
 
 triggers:
-  - alias: Trigger to request for music
+  - alias: Trigger for music request
     trigger: conversation
     command: !input trigger
 
 actions:
-  - alias: Store input from blueprint in variables so they can be used in the prompt
+  - alias: Setup Variables
     variables:
       version: 20250404
-      shuffle: >-
-        {{
-          ('shuffle' in (trigger.sentence | lower))
-          or ('zufall' in (trigger.sentence | lower))
-        }}
+      shuffle: "{{ ('shuffle' in trigger.sentence|lower) or ('zufall' in trigger.sentence|lower) }}"
       expose_areas: !input expose_areas
       expose_players: !input expose_players
       prompt:
@@ -282,14 +210,14 @@ actions:
       area_names: "{{ integration_entities('music_assistant') | map('area_name') | list }}"
       player_names: "{{ integration_entities('music_assistant') | map('state_attr','friendly_name') | list }}"
 
-  - alias: Send the request to the LLM
+  - alias: Process with LLM
     action: conversation.process
     data:
-      text: "{{ prompt.values() | join('') }}"
+      text: "{{ prompt.values() | join('\n') }}"
       agent_id: !input llm_agent
     response_variable: result
 
-  - alias: Store relevant part of LLM result in variable and define target
+  - alias: Parse Result
     variables:
       llm_result: "{{ result.response.speech.plain.speech | from_json }}"
       play_continuously: !input play_continuously
@@ -310,9 +238,7 @@ actions:
           {% set players = players | join('|') if players is list else players %}
           {{
             integration_entities('music_assistant') | expand
-            | selectattr('name', 'in',
-              player_names | select('search', players, ignorecase=true) | list
-            )
+            | selectattr('name', 'in', player_names | select('search', players, ignorecase=true) | list)
             | map(attribute='entity_id') | list if players else []
           }}
         area_id: >-
@@ -329,14 +255,13 @@ actions:
       target_data: "{{ (llm_target_data if llm_target else backup_target) | default({}, true) }}"
       target: "{{ dict(target_data.items() | selectattr('1')) }}"
 
-  - alias: Only try to act when target was determined
+  - alias: Execute Action
     if:
-      - alias: Check if it was possible to determine a target
-        condition: template
+      - condition: template
         value_template: "{{ iif(target) }}"
     then:
       - choose:
-          # 1. SHUFFLE CONTROL
+          # Shuffle
           - conditions:
               - condition: template
                 value_template: "{{ llm_action_data.media_id in ['shuffle_on', 'shuffle_off'] }}"
@@ -346,7 +271,7 @@ actions:
                   shuffle: "{{ true if llm_action_data.media_id == 'shuffle_on' else false }}"
                 target: "{{ target }}"
 
-          # 2. REPEAT CONTROL
+          # Repeat
           - conditions:
               - condition: template
                 value_template: "{{ 'repeat' in llm_action_data.media_id }}"
@@ -356,33 +281,29 @@ actions:
                   repeat: "{{ llm_action_data.media_id | replace('repeat_', '') }}"
                 target: "{{ target }}"
 
-          # 3. VOLUME CONTROL
+          # Volume
           - conditions:
               - condition: template
                 value_template: "{{ 'volume' in llm_action_data.media_id }}"
             sequence:
               - choose:
-                  # Set Volume to specific % (e.g., volume_50)
                   - conditions: >-
-                      {{ '_' in llm_action_data.media_id
-                         and (llm_action_data.media_id.split('_')[1] | is_number) }}
+                      {{ '_' in llm_action_data.media_id and (llm_action_data.media_id.split('_')[1] | is_number) }}
                     sequence:
                       - service: media_player.volume_set
                         data:
                           volume_level: "{{ (llm_action_data.media_id.split('_')[1] | float) / 100 }}"
                         target: "{{ target }}"
-                  # Volume Up
                   - conditions: "{{ llm_action_data.media_id == 'volume_up' }}"
                     sequence:
                       - service: media_player.volume_up
                         target: "{{ target }}"
-                  # Volume Down
                   - conditions: "{{ llm_action_data.media_id == 'volume_down' }}"
                     sequence:
                       - service: media_player.volume_down
                         target: "{{ target }}"
 
-          # 4. BASIC CONTROL (Stop, Next, Prev, Pause)
+          # Basic Control
           - conditions:
               - condition: template
                 value_template: "{{ llm_action_data.media_type == 'control' }}"
@@ -400,15 +321,12 @@ actions:
                   }}
                 target: "{{ target }}"
 
-        # 5. DEFAULT (Play New Media)
         default:
-          - alias: Play Music based on LLM result
-            action: music_assistant.play_media
+          # Play Media
+          - action: music_assistant.play_media
             data: "{{ dict(llm_action_data.items() | rejectattr('1', 'eq', 'NA')) }}"
             target: "{{ target }}"
-
-          - alias: Set Shuffle if user asked for it in the query
-            if:
+          - if:
               - condition: template
                 value_template: "{{ shuffle == true }}"
             then:
@@ -417,7 +335,7 @@ actions:
                   shuffle: true
                 target: "{{ target }}"
 
-  - alias: Set variables for responses
+  - alias: Send Response
     variables:
       combine: !input combine_text
       responses:
@@ -447,12 +365,10 @@ actions:
            else player_list | join(' ' ~ combine ~ ' ') }}
       media_info: "{{ llm_result.media_description | default(llm_action_data.media_id, true) }}"
 
-  - alias: Set response for Assist
     set_conversation_response: >-
       {{ responses[response]
          | replace('<media_info>', media_info)
          | replace('<area_info>', area_info)
          | replace('<player_info>', player_info)
       }}
-
 mode: parallel
