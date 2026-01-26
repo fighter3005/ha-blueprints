@@ -1,41 +1,43 @@
 blueprint:
   domain: automation
-  name: Music Assistant - LLM Voice Control (General)
+  name: Music Assistant - Local LLM Enhanced Voice Support (Volume Added)
+  source_url: https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   description: '![Image](https://github.com/music-assistant/voice-support/blob/main/assets/music-assistant.png?raw=true)
     # Play & Control media using voice commands with LLM assistance
-
-    **Universal Version:** Merges support for extended conversation agents, volume control, and multi-language triggers.
-
-    ### Setup
-    1. Select your **LLM Conversation Agent** (e.g., OpenAI, Ollama, Assist).
-    2. Ensure **Radio Mode** is set to "Always" if you want continuous playback.
-
-    ### Features
-    * **Play:** "Play Queen", "Play something", "Spiele etwas Jazz"
-    * **Control:** "Stop", "Next", "Pause", "Weiter"
-    * **Volume:** "Set volume to 50", "Turn it up", "Lautstärke auf 20"
-    * **Settings:** "Turn on shuffle", "Repeat all", "Zufallswiedergabe an"
+    **FINAL VERSION:** Supports Playback Controls, Shuffle, Repeat, **Volume**, and Generic "Play Music" requests.
+    ### LLM Agent
+    Select your Conversation Agent here (e.g. Extended OpenAI Conversation).
+    ### Configuration Note
+    To ensure music keeps playing after one song (Queue/Radio mode), set **Radio Mode** to **"Always"** in the automation settings below.
+    ### Usage
+    * **Play:** "Play Queen", "Play something", "Play some jazz"
+    * **Control:** "Stop", "Next", "Pause"
+    * **Volume:** "Set volume to 50", "Turn it up", "Volume down in the kitchen"
+    * **Settings:** "Turn on shuffle", "Repeat all"
     '
-  source_url: https://github.com/music-assistant/voice-support/blob/main/llm-enhanced-local-assist-blueprint/mass_llm_enhanced_assist_blueprint_en.yaml
   homeassistant:
     min_version: 2024.10.0
   input:
     llm_agent:
       name: LLM Conversation Agent
-      description: Select the Conversation Agent entity you want to use (e.g., conversation.chatgpt, conversation.home_assistant).
+      description: The LLM agent (e.g. Extended OpenAI Conversation) you want to use.
       selector:
         entity:
           filter:
-            - domain: conversation
+          - domain:
+            - conversation
           multiple: false
     music_assistant_settings:
       name: Settings for Music Assistant playback
       icon: mdi:music
-      description: Adjust how Music Assistant playback is handled.
+      description: You can use these settings to adjust how Music Assistant playback
+        is handled
       input:
         default_player:
           name: Default Player
-          description: 'The default Music Assistant player used if the voice command does not specify a room/player.'
+          description: 'The default Music Assistant player which will be used in case
+            it is not clear from the request in which area or on which player the
+            request should be played.'
           selector:
             entity:
               filter:
@@ -46,7 +48,8 @@ blueprint:
           default:
         play_continuously:
           name: Radio Mode
-          description: 'IMPORTANT: Set to "Always" for auto-filling the queue (Radio mode). If "Never", playback stops after the specific track/album.'
+          description: 'IMPORTANT: Set this to "Always" if you want the queue to auto-fill with songs (Continuous/Radio mode).
+            If set to "Never", playback stops after the specific song/album finishes.'
           selector:
             select:
               options:
@@ -58,20 +61,19 @@ blueprint:
               sort: false
           default: Use player settings
     response_settings:
-      name: Trigger and Response Settings
+      name: Trigger and response settings for Assist
       icon: mdi:chat
-      description: Configure triggers and spoken responses.
+      description: 'You can use this setting to set the responses Assist will give.'
       collapsed: true
       input:
         trigger:
           name: Conversation trigger sentences
-          description: Triggers for the automation (Supports EN and DE by default).
+          description: Triggers for the automation.
           selector:
             text:
               multiline: false
               multiple: true
           default:
-          # English Triggers
           - (shuffle|play|listen to) {query}
           - (stop|pause|resume|next|skip|previous) [the] [music|song|track|media] [in|on] {query}
           - (stop|pause|resume|next|skip|previous) [the] [music|song|track|media]
@@ -81,15 +83,6 @@ blueprint:
           - (set|change) volume [to] {query}
           - (turn|volume) (up|down) [in|on] {query}
           - (turn|volume) (up|down)
-          # German Triggers
-          - (spiele|hör|höre) {query}
-          - (stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges) [die] [musik|lied|titel|medium] [in|im|auf] {query}
-          - (stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges) [die] [musik|lied|titel|medium]
-          - (aktiviere|deaktiviere|schalte ein|schalte aus|setze) (zufallswiedergabe|wiederholen) [in|im|auf] {query}
-          - (aktiviere|deaktiviere|schalte ein|schalte aus|setze) (zufallswiedergabe|wiederholen)
-          - wiederhole (eins|alle|aus)
-          - (setze|ändere) [die] lautstärke [auf] {query}
-          - (lauter|leiser) [machen]
         combine_text:
           name: Combine word
           description: Word used to join areas (e.g. "Kitchen <and> Living Room")
@@ -131,9 +124,9 @@ blueprint:
               multiple: false
           default: OK, <media_info> in <area_info> and on <player_info>
     prompt_settings:
-      name: LLM Prompt Settings
+      name: Prompt setting for the LLM
       icon: mdi:robot
-      description: Fine-tune the system prompts sent to the AI.
+      description: Fine-tune the prompts.
       collapsed: true
       input:
         expose_players:
@@ -292,8 +285,7 @@ actions:
 - alias: Store input from blueprint in variables so they can be used in the prompt
   variables:
     version: 20250404
-    llm_agent_id: !input llm_agent
-    shuffle: '{{ ''shuffle'' in trigger.sentence | lower or ''zufall'' in trigger.sentence | lower }}'
+    shuffle: '{{ ''shuffle'' in trigger.sentence | lower }}'
     expose_areas: !input expose_areas
     expose_players: !input expose_players
     prompt:
@@ -314,7 +306,7 @@ actions:
   data:
     text: '{{ prompt.values() | join(''
       '') }}'
-    agent_id: '{{ llm_agent_id }}'
+    agent_id: !input llm_agent
   response_variable: result
 - alias: Store relevant part of LLM result in variable and define target
   variables:
@@ -354,7 +346,7 @@ actions:
     condition: template
     value_template: '{{ iif(target) }}'
   then:
-  # Extended Choose block for Control Types (Shuffle, Repeat, Volume, Basic)
+  # NEW: Extended Choose block for Control Types
   - choose:
     # 1. SHUFFLE CONTROL
     - conditions:
