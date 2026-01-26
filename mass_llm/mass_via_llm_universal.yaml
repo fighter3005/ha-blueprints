@@ -1,0 +1,221 @@
+blueprint:
+  domain: automation
+  name: Music Assistant – Universal LLM Voice Control (Multi‑Language)
+  source_url: https://github.com/music-assistant/voice-support
+  description: >
+    Play and control Music Assistant using voice commands with any Home Assistant
+    conversation agent (Extended OpenAI, Ollama, LiteLLM, etc.).
+
+    ✅ Multi‑language (English & German triggers included)
+    ✅ Playback, Shuffle, Repeat, Volume
+    ✅ Area & Player targeting
+    ✅ Default / device fallback
+    ✅ Radio (continuous play) support
+
+  homeassistant:
+    min_version: 2024.10.0
+
+input:
+  llm_agent:
+    name: Conversation Agent
+    description: >
+      Select the conversation agent (Extended OpenAI Conversation, Ollama, LiteLLM, etc.)
+    selector:
+      entity:
+        filter:
+          - domain: conversation
+        multiple: false
+
+  music_assistant_settings:
+    name: Music Assistant Settings
+    icon: mdi:music
+    input:
+      default_player:
+        name: Default Player
+        selector:
+          entity:
+            filter:
+              - integration: music_assistant
+                domain: media_player
+            multiple: false
+        default:
+
+      play_continuously:
+        name: Radio Mode
+        description: >
+          Set to "Always" to keep playback going (radio/queue mode)
+        selector:
+          select:
+            options:
+              - Use player settings
+              - Always
+              - Never
+        default: Use player settings
+
+  response_settings:
+    name: Assist Responses
+    icon: mdi:chat
+    collapsed: true
+    input:
+      trigger:
+        name: Conversation Triggers (EN + DE)
+        selector:
+          text:
+            multiple: true
+        default:
+          # PLAY
+          - (play|shuffle|listen to|spiele|hör|höre) {query}
+
+          # BASIC CONTROL
+          - (stop|pause|resume|next|skip|previous|stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges) [the|die] [music|song|track|musik|lied|titel] [in|on|im|auf] {query}
+          - (stop|pause|resume|next|skip|previous|stopp|halt|pausier|pausiere|fortsetzen|nächstes|überspringen|vorheriges)
+
+          # SHUFFLE / REPEAT
+          - (turn on|turn off|enable|disable|set|aktiviere|deaktiviere|schalte ein|schalte aus|setze) (shuffle|zufallswiedergabe|repeat|wiederholen) [in|on|im|auf] {query}
+          - repeat (one|all|off|eins|alle|aus)
+
+          # VOLUME
+          - (set|change|turn|volume|lautstärke) (volume|lautstärke) [to|auf] {query}
+          - (turn|volume|lautstärke) (up|down|hoch|runter) [in|on|im|auf] {query}
+
+      combine_text:
+        name: Combine word
+        default: and
+
+      no_target_response:
+        name: No Target Response
+        default: No target could be determined and no default player is set.
+
+      area_response:
+        default: OK, <media_info> in <area_info>
+
+      player_response:
+        default: OK, <media_info> on <player_info>
+
+      area_and_player_response:
+        default: OK, <media_info> in <area_info> and on <player_info>
+
+  prompt_settings:
+    name: LLM Prompt Settings
+    icon: mdi:robot
+    collapsed: true
+    input:
+      expose_players:
+        selector: { boolean: {} }
+        default: true
+
+      expose_areas:
+        selector: { boolean: {} }
+        default: true
+
+      llm_prompt_intro:
+        default: >
+          You are an AI that converts a spoken command into structured JSON.
+          The user may speak in any language.
+          The request can be about playing music or controlling playback (stop, next,
+          shuffle, repeat, volume).
+
+          User request: "{{ trigger.sentence }}"
+
+          Expected JSON format:
+          {
+            "action_data": {
+              "media_id": "string",
+              "media_type": "control|track|album|artist|playlist|radio",
+              "artist": "string",
+              "album": "string"
+            },
+            "media_description": "string",
+            "target_data": {
+              "areas": [],
+              "players": []
+            }
+          }
+
+      llm_prompt_media_id:
+        default: >
+          If media_type is "control":
+          - media_stop
+          - media_play_pause
+          - media_next_track
+          - media_previous_track
+          - shuffle_on / shuffle_off
+          - repeat_all / repeat_one / repeat_off
+          - volume_up / volume_down / volume_X (0–100)
+
+          Otherwise, media_id is the name of the requested media.
+          If request is generic ("play music"), use:
+          media_type: "artist", media_id: "Library"
+
+      llm_prompt_outro:
+        default: >
+          IMPORTANT:
+          - media_type values MUST be English
+          - Respond ONLY with valid JSON
+          - No explanations, no extra text
+
+triggers:
+  - trigger: conversation
+    command: !input trigger
+
+actions:
+  - variables:
+      llm_agent_id: !input llm_agent
+      shuffle_requested: "{{ 'shuffle' in trigger.sentence | lower }}"
+      area_names: "{{ integration_entities('music_assistant') | map('area_name') | list }}"
+      player_names: "{{ integration_entities('music_assistant') | map('state_attr','friendly_name') | list }}"
+      prompt: >
+        {{ llm_prompt_intro }}
+        {{ llm_prompt_media_id }}
+        {{ llm_prompt_outro }}
+
+  - action: conversation.process
+    data:
+      agent_id: "{{ llm_agent_id }}"
+      text: "{{ prompt }}"
+    response_variable: result
+
+  - variables:
+      llm: "{{ result.response.speech.plain.speech | from_json }}"
+      action: "{{ llm.action_data }}"
+      target_players: "{{ llm.target_data.players | default([]) }}"
+      target_areas: "{{ llm.target_data.areas | default([]) }}"
+
+  - choose:
+      - conditions: "{{ 'volume' in action.media_id }}"
+        sequence:
+          - service: media_player.volume_set
+            data:
+              volume_level: "{{ (action.media_id.split('_')[1] | float) / 100 }}"
+            target:
+              entity_id: "{{ target_players }}"
+
+      - conditions: "{{ action.media_id in ['shuffle_on','shuffle_off'] }}"
+        sequence:
+          - service: media_player.shuffle_set
+            data:
+              shuffle: "{{ action.media_id == 'shuffle_on' }}"
+            target:
+              entity_id: "{{ target_players }}"
+
+      - conditions: "{{ 'repeat' in action.media_id }}"
+        sequence:
+          - service: media_player.repeat_set
+            data:
+              repeat: "{{ action.media_id | replace('repeat_','') }}"
+            target:
+              entity_id: "{{ target_players }}"
+
+      - conditions: "{{ action.media_type == 'control' }}"
+        sequence:
+          - service: "media_player.{{ action.media_id }}"
+            target:
+              entity_id: "{{ target_players }}"
+
+    default:
+      - service: music_assistant.play_media
+        data: "{{ dict(action.items() | rejectattr('1','eq','NA')) }}"
+        target:
+          entity_id: "{{ target_players }}"
+
+mode: parallel
