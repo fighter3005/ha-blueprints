@@ -265,10 +265,11 @@ blueprint:
             text:
               multiline: true
               multiple: false
-          default: 'Note that the input query can be in a different language. For
-            the "media_type" the untranslated English terms should be used.
-            IMPORTANT: You must reply with only the JSON model, nothing before nor
-            after! Only the JSON!'
+          default: 'Return exactly one valid JSON object.\nThe first character of your response must be {\nThe last character of your response must be }\n\nDo not use Markdown.\nDo not use ```json or any other code fences.\nDo not include explanations, comments, headings, or text outside the JSON object.\nUse double quotes for all JSON property names and string values.'
+#          default: 'Note that the input query can be in a different language. For
+#            the "media_type" the untranslated English terms should be used.
+#            IMPORTANT: You must reply with only the JSON model, nothing before nor
+#            after! Only the JSON!'
         llm_prompt:
           name: Legacy LLM prompt setting
           description: Legacy field.
@@ -310,7 +311,14 @@ actions:
   response_variable: result
 - alias: Store relevant part of LLM result in variable and define target
   variables:
-    llm_result: '{{ result.response.speech.plain.speech | from_json }}'
+#    llm_result: '{{ result.response.speech.plain.speech | from_json }}'
+    llm_result: >-
+      {% set raw = result.response.speech.plain.speech | trim %}
+      {% set raw = raw
+        | regex_replace('(?is)^\s*```(?:json)?\s*', '')
+        | regex_replace('(?is)\s*```\s*$', '')
+        | trim %}
+      {{ raw | from_json }}
     play_continuously: !input play_continuously
     llm_action_data:
       media_id: '{{ llm_result.action_data.media_id }}'
